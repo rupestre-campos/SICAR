@@ -49,6 +49,7 @@ class Sicar(Url):
         self,
         driver: Captcha = Tesseract,
         headers: Dict = None,
+        retries: int = 3
     ):
         """
         Initialize an instance of the Sicar class.
@@ -56,12 +57,13 @@ class Sicar(Url):
         Parameters:
             driver (Captcha): The driver used for handling captchas. Default is Tesseract.
             headers (Dict): Additional headers for HTTP requests. Default is None.
+            retries (int): Number of retries to use in HTTP Transport layer for connection Timeout or Error
 
         Returns:
             None
         """
         self._driver = driver()
-        self._create_session(headers=headers)
+        self._create_session(headers=headers, retries=retries)
         self._initialize_cookies()
 
     @staticmethod
@@ -96,12 +98,13 @@ class Sicar(Url):
 
         return state_dates
 
-    def _create_session(self, headers: Dict = None):
+    def _create_session(self, headers: Dict = None, retries: int = 3):
         """
         Create a new session for making HTTP requests.
 
         Parameters:
             headers (Dict): Additional headers for the session. Default is None.
+            retries (int): Number of retries to attempt on ConnectError or ConnectTimeout
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -113,7 +116,9 @@ class Sicar(Url):
         Returns:
             None
         """
-        self._session = httpx.Client(verify=False)
+        self._session = httpx.Client(
+            verify=False, transport=httpx.HTTPTransport(retries=retries)
+        )
         self._session.headers.update(
             headers
             if isinstance(headers, dict)
