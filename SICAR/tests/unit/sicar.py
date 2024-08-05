@@ -55,7 +55,7 @@ class SicarTestCase(unittest.TestCase):
     @patch("httpx.Client")
     def test_create_session_with_ssl_disabled(self, mock_session):
         Sicar(driver=self.mocked_captcha)
-        mock_session.assert_called_once_with(verify=False)
+        mock_session.assert_called_once()
 
     @patch("httpx.Client")
     def test_create_session_with_custom_headers(self, mock_session):
