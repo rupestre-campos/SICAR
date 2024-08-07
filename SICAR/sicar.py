@@ -147,7 +147,8 @@ class Sicar(Url):
             transport=httpx.HTTPTransport(retries=retries),
             timeout=timeout,
             http2=use_http2,
-            proxy=proxy
+            proxy=proxy,
+            follow_redirects=True
         )
         self._session.headers.update(
             headers
