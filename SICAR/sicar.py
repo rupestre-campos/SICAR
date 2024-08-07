@@ -50,8 +50,9 @@ class Sicar(Url):
         driver: Captcha = Tesseract,
         headers: Dict = None,
         retries: int = 3,
-        read_timeout: int = 60,
-        connect_timeout: int = 60,
+        read_timeout: int = 20,
+        connect_timeout: int = 20,
+        http_version: str = "HTTP/1.1"
     ):
         """
         Initialize an instance of the Sicar class.
@@ -62,6 +63,8 @@ class Sicar(Url):
             retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
             read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
             connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
+            http_version (str): HTTP version, supports "HTTP/1.1" or "HTTP/2". Defaults to "HTTP/1.1".
+
         Returns:
             None
         """
@@ -110,6 +113,7 @@ class Sicar(Url):
         retries: int = 3,
         read_timeout: int = 60,
         connect_timeout: int = 60,
+        http_version: str = "HTTP/1.1"
     ):
         """
         Create a new session for making HTTP requests.
@@ -119,6 +123,7 @@ class Sicar(Url):
             retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
             read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
             connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
+            http_version (str): HTTP version, supports "HTTP/1.1" or "HTTP/2". Defaults to "HTTP/1.1".
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -135,6 +140,7 @@ class Sicar(Url):
             verify=False,
             transport=httpx.HTTPTransport(retries=retries),
             timeout=timeout,
+            http_versions=http_version
         )
         self._session.headers.update(
             headers
