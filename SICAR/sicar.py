@@ -52,7 +52,7 @@ class Sicar(Url):
         retries: int = 3,
         read_timeout: int = 20,
         connect_timeout: int = 20,
-        http_version: str = "HTTP/1.1"
+        use_http2: bool = False
     ):
         """
         Initialize an instance of the Sicar class.
@@ -63,7 +63,7 @@ class Sicar(Url):
             retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
             read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
             connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
-            http_version (str): HTTP version, supports "HTTP/1.1" or "HTTP/2". Defaults to "HTTP/1.1".
+            use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
 
         Returns:
             None
@@ -74,7 +74,7 @@ class Sicar(Url):
             retries=retries,
             read_timeout=read_timeout,
             connect_timeout=connect_timeout,
-            http_version=http_version
+            use_http2=use_http2
         )
         self._initialize_cookies()
 
@@ -112,9 +112,9 @@ class Sicar(Url):
         self,
         headers: Dict = None,
         retries: int = 3,
-        read_timeout: int = 60,
-        connect_timeout: int = 60,
-        http_version: str = "HTTP/1.1"
+        read_timeout: int = 20,
+        connect_timeout: int = 20,
+        use_http2: bool = False
     ):
         """
         Create a new session for making HTTP requests.
@@ -122,9 +122,9 @@ class Sicar(Url):
         Parameters:
             headers (Dict): Additional headers for the session. Default is None.
             retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
-            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
-            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
-            http_version (str): HTTP version, supports "HTTP/1.1" or "HTTP/2". Defaults to "HTTP/1.1".
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
+            use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -141,7 +141,7 @@ class Sicar(Url):
             verify=False,
             transport=httpx.HTTPTransport(retries=retries),
             timeout=timeout,
-            http_versions=http_version
+            http2=use_http2
         )
         self._session.headers.update(
             headers
