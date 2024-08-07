@@ -36,7 +36,7 @@ from collections import deque
 
 
 class RateLimiter:
-    def __init__(self, maxRate=5, timeUnit=1):
+    def __init__(self, maxRate=1, timeUnit=0.5):
         self.timeUnit = timeUnit
         self.deque = deque(maxlen=maxRate)
 
