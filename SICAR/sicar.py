@@ -278,10 +278,7 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
-<<<<<<< HEAD
                         time.sleep(time_wait)
-=======
->>>>>>> 43bc25476e4360356415f5d18307b2aa73824be7
 
         return path
 
