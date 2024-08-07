@@ -32,6 +32,25 @@ from SICAR.exceptions import (
     FailedToGetReleaseDateException,
 )
 
+from collections import deque
+
+
+class RateLimiter:
+    def __init__(self, maxRate=5, timeUnit=1):
+        self.timeUnit = timeUnit
+        self.deque = deque(maxlen=maxRate)
+
+    def __call__(self):
+        if self.deque.maxlen == len(self.deque):
+            cTime = time.time()
+            if cTime - self.deque[0] > self.timeUnit:
+                self.deque.append(cTime)
+                return False
+            else:
+                return True
+        self.deque.append(time.time())
+        return False
+
 
 class Sicar(Url):
     """
@@ -260,7 +279,7 @@ class Sicar(Url):
             path = Path(
                 os.path.join(folder, f"{state.value}_{polygon.value}")
             ).with_suffix(".zip")
-
+            r = RateLimiter()
             with open(path, "wb") as fd:
                 with tqdm(
                     total=content_length,
@@ -271,7 +290,9 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
-                        time.sleep(random.random() + random.random())
+                        while not r():
+                            time.sleep(0.1)
+
         return path
 
     def download_state(
