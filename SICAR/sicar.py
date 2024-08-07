@@ -49,7 +49,9 @@ class Sicar(Url):
         self,
         driver: Captcha = Tesseract,
         headers: Dict = None,
-        retries: int = 3
+        retries: int = 3,
+        read_timeout: int = 60,
+        connect_timeout: int = 60,
     ):
         """
         Initialize an instance of the Sicar class.
@@ -57,13 +59,19 @@ class Sicar(Url):
         Parameters:
             driver (Captcha): The driver used for handling captchas. Default is Tesseract.
             headers (Dict): Additional headers for HTTP requests. Default is None.
-            retries (int): Number of retries to use in HTTP Transport layer for connection Timeout or Error
-
+            retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
         Returns:
             None
         """
         self._driver = driver()
-        self._create_session(headers=headers, retries=retries)
+        self._create_session(
+            headers=headers,
+            retries=retries,
+            read_timeout=read_timeout,
+            connect_timeout=connect_timeout,
+        )
         self._initialize_cookies()
 
     def _parse_release_dates_html(self, response: bytes) -> Dict:
@@ -97,18 +105,20 @@ class Sicar(Url):
         return state_dates
 
     def _create_session(
-            self,
-            headers: Dict = None,
-            retries: int = 3,
-            read_timeout: int = 60,
-            connect_timeout: int = 60
-        ):
+        self,
+        headers: Dict = None,
+        retries: int = 3,
+        read_timeout: int = 60,
+        connect_timeout: int = 60,
+    ):
         """
         Create a new session for making HTTP requests.
 
         Parameters:
             headers (Dict): Additional headers for the session. Default is None.
-            retries (int): Number of retries to attempt on ConnectError or ConnectTimeout
+            retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -124,7 +134,7 @@ class Sicar(Url):
         self._session = httpx.Client(
             verify=False,
             transport=httpx.HTTPTransport(retries=retries),
-            timeout=timeout
+            timeout=timeout,
         )
         self._session.headers.update(
             headers
@@ -250,7 +260,6 @@ class Sicar(Url):
                     unit="iB",
                     unit_scale=True,
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
-
                 ) as progress_bar:
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
