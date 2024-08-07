@@ -61,8 +61,8 @@ class Sicar(Url):
             driver (Captcha): The driver used for handling captchas. Default is Tesseract.
             headers (Dict): Additional headers for HTTP requests. Default is None.
             retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
-            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 60.
-            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 60.
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
             http_version (str): HTTP version, supports "HTTP/1.1" or "HTTP/2". Defaults to "HTTP/1.1".
 
         Returns:
@@ -74,6 +74,7 @@ class Sicar(Url):
             retries=retries,
             read_timeout=read_timeout,
             connect_timeout=connect_timeout,
+            http_version=http_version
         )
         self._initialize_cookies()
 
