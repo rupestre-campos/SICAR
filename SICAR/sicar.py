@@ -32,25 +32,6 @@ from SICAR.exceptions import (
     FailedToGetReleaseDateException,
 )
 
-from collections import deque
-
-
-class RateLimiter:
-    def __init__(self, maxRate=1, timeUnit=0.5):
-        self.timeUnit = timeUnit
-        self.deque = deque(maxlen=maxRate)
-
-    def __call__(self):
-        if self.deque.maxlen == len(self.deque):
-            cTime = time.time()
-            if cTime - self.deque[0] > self.timeUnit:
-                self.deque.append(cTime)
-                return False
-            else:
-                return True
-        self.deque.append(time.time())
-        return False
-
 
 class Sicar(Url):
     """
@@ -236,6 +217,7 @@ class Sicar(Url):
         captcha: str,
         folder: str,
         chunk_size: int = 1024,
+        time_wait: int = 0,
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -246,6 +228,7 @@ class Sicar(Url):
             captcha (str): The captcha value for verification.
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -279,7 +262,6 @@ class Sicar(Url):
             path = Path(
                 os.path.join(folder, f"{state.value}_{polygon.value}")
             ).with_suffix(".zip")
-            r = RateLimiter()
             with open(path, "wb") as fd:
                 with tqdm(
                     total=content_length,
@@ -290,8 +272,7 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
-                        while r():
-                            time.sleep(0.1)
+                        time.sleep(time_wait)
 
         return path
 
@@ -303,6 +284,7 @@ class Sicar(Url):
         tries: int = 25,
         debug: bool = False,
         chunk_size: int = 1024,
+        time_wait: int = 0,
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -314,6 +296,7 @@ class Sicar(Url):
             tries (int, optional): The number of attempts to download the data. Defaults to 25.
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -356,6 +339,7 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
+                        time_wait=time_wait
                     )
                 elif debug:
                     print(
