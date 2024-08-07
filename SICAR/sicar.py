@@ -52,7 +52,8 @@ class Sicar(Url):
         retries: int = 3,
         read_timeout: int = 20,
         connect_timeout: int = 20,
-        use_http2: bool = False
+        use_http2: bool = False,
+        proxy: str = None
     ):
         """
         Initialize an instance of the Sicar class.
@@ -64,6 +65,7 @@ class Sicar(Url):
             read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
             connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
             use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
+            proxy (str): URL or ip:port to use as proxy. Defaults to None.
 
         Returns:
             None
@@ -74,7 +76,8 @@ class Sicar(Url):
             retries=retries,
             read_timeout=read_timeout,
             connect_timeout=connect_timeout,
-            use_http2=use_http2
+            use_http2=use_http2,
+            proxy=proxy
         )
         self._initialize_cookies()
 
@@ -114,7 +117,8 @@ class Sicar(Url):
         retries: int = 3,
         read_timeout: int = 20,
         connect_timeout: int = 20,
-        use_http2: bool = False
+        use_http2: bool = False,
+        proxy: str = None
     ):
         """
         Create a new session for making HTTP requests.
@@ -125,6 +129,7 @@ class Sicar(Url):
             read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
             connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
             use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
+            proxy (str): URL or ip:port to use as proxy. Defaults to None.
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -141,7 +146,8 @@ class Sicar(Url):
             verify=False,
             transport=httpx.HTTPTransport(retries=retries),
             timeout=timeout,
-            http2=use_http2
+            http2=use_http2,
+            proxy=proxy
         )
         self._session.headers.update(
             headers
@@ -272,7 +278,10 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
+<<<<<<< HEAD
                         time.sleep(time_wait)
+=======
+>>>>>>> 43bc25476e4360356415f5d18307b2aa73824be7
 
         return path
 
