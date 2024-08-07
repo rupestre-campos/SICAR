@@ -271,6 +271,7 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
+                        time.sleep(random.random() + random.random())
         return path
 
     def download_state(
