@@ -96,7 +96,13 @@ class Sicar(Url):
 
         return state_dates
 
-    def _create_session(self, headers: Dict = None, retries: int = 3):
+    def _create_session(
+            self,
+            headers: Dict = None,
+            retries: int = 3,
+            read_timeout: int = 60,
+            connect_timeout: int = 60
+        ):
         """
         Create a new session for making HTTP requests.
 
@@ -114,8 +120,11 @@ class Sicar(Url):
         Returns:
             None
         """
+        timeout = httpx.Timeout(read_timeout, connect=connect_timeout)
         self._session = httpx.Client(
-            verify=False, transport=httpx.HTTPTransport(retries=retries)
+            verify=False,
+            transport=httpx.HTTPTransport(retries=retries),
+            timeout=timeout
         )
         self._session.headers.update(
             headers
@@ -241,6 +250,7 @@ class Sicar(Url):
                     unit="iB",
                     unit_scale=True,
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+
                 ) as progress_bar:
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
