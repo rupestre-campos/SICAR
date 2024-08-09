@@ -224,7 +224,7 @@ class Sicar(Url):
         folder: str,
         chunk_size: int = 1024,
         time_wait: int = 0,
-        timeout_limit: int = 10,
+        min_download_rate_limit: float = 3,
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -236,7 +236,7 @@ class Sicar(Url):
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
-            timeout_limit (int): Max time to wait between each chunk before raising a Error. Defaults to 10.
+            min_download_rate_limit (float): Minimal acceptable rate in kb/s before raising a Error. Defaults to 3.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -284,7 +284,7 @@ class Sicar(Url):
                         time.sleep(time_wait)
                         time_end = time.time()
                         elapsed_time = time_end - time_start
-                        if elapsed_time > timeout_limit:
+                        if len(chunk)/elapsed_time < min_download_rate_limit:
                             raise FailedToDownloadPolygonException()
                         time_start = time.time()
 
@@ -299,7 +299,7 @@ class Sicar(Url):
         debug: bool = False,
         chunk_size: int = 1024,
         time_wait: int = 0,
-        timeout_limit: int = 10,
+        min_download_rate_limit: float = 3,
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -313,6 +313,7 @@ class Sicar(Url):
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
             timeout_limit (int): Max time to wait between each chunk before raising a Error. Defaults to 10.
+            min_download_rate_limit (float): Minimal acceptable rate in kb/s before raising a Error. Defaults to 3.
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -356,7 +357,7 @@ class Sicar(Url):
                         folder=folder,
                         chunk_size=chunk_size,
                         time_wait=time_wait,
-                        timeout_limit=timeout_limit
+                        min_download_rate_limit=min_download_rate_limit
                     )
                 elif debug:
                     print(
