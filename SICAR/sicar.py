@@ -296,9 +296,11 @@ class Sicar(Url):
                 # Skip already downloaded bytes
                 if downloaded_size > 0:
                     for _ in range(downloaded_size // chunk_size):
+                        print("skiping")
                         next(response.iter_bytes(chunk_size=chunk_size))
 
                 for chunk in response.iter_bytes(chunk_size=chunk_size):
+                    print("chunk")
                     fd.write(chunk)
 
                     time_end = time.time()
