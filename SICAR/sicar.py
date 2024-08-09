@@ -12,6 +12,7 @@ import os
 import time
 import random
 import httpx
+from collections import deque
 from PIL import Image, UnidentifiedImageError
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -279,17 +280,18 @@ class Sicar(Url):
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
                 ) as progress_bar:
                     time_start = time.time()
-                    min_download_rate_limit_tolerance_count = 0
+                    max_elements = 10
+                    download_rates = deque(maxlen=max_elements)
+
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
                         time.sleep(time_wait)
                         time_end = time.time()
                         elapsed_time = time_end - time_start
-                        if (len(chunk)/1024)/elapsed_time < min_download_rate_limit:
-                            min_download_rate_limit_tolerance_count +=1
-                            if min_download_rate_limit_tolerance_count > min_download_rate_limit_tolerance:
-                                raise FailedToDownloadPolygonException()
+                        download_rates.append(len(chunk)/1024)/elapsed_time)
+                        if sum(list(download_rates))/max_elements < min_download_rate_limit:
+                            raise FailedToDownloadPolygonException()
                         time_start = time.time()
 
         return path
