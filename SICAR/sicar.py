@@ -216,7 +216,6 @@ class Sicar(Url):
             raise FailedToDownloadCaptchaException() from error
 
         return captcha
-
     def _download_polygon(
         self,
         state: State,
@@ -226,7 +225,7 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
-        min_download_rate_limit_tolerance: int = 3
+        sample_size_download_rate: int = 25
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -238,7 +237,7 @@ class Sicar(Url):
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
-            min_download_rate_limit (float): Minimal acceptable rate in kb/s before raising a Error. Defaults to 3.
+            min_download_rate_limit (float): Minimal acceptable rate in kb/s before raising an Error. Defaults to 3.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -256,7 +255,10 @@ class Sicar(Url):
             {"idEstado": state.value, "tipoBase": polygon.value, "ReCaptcha": captcha}
         )
 
-        with self._session.stream("GET", f"{self._DOWNLOAD_BASE}?{query}") as response:
+        with self._session.stream(
+            "GET",
+            f"{self._DOWNLOAD_BASE}?{query}",
+        ) as response:
             try:
                 if response.status_code != httpx.codes.OK:
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
@@ -264,35 +266,59 @@ class Sicar(Url):
                 raise FailedToDownloadPolygonException() from error
 
             content_length = int(response.headers.get("Content-Length", 0))
-
             content_type = response.headers.get("Content-Type", "")
 
             if content_length == 0 or not content_type.startswith("application/zip"):
                 raise FailedToDownloadPolygonException()
-            path = Path(
-                os.path.join(folder, f"{state.value}_{polygon.value}")
-            ).with_suffix(".zip")
-            with open(path, "wb") as fd:
+
+            # Path for the complete download
+            path = Path(os.path.join(folder, f"{state.value}_{polygon.value}")).with_suffix(".zip")
+            # Path for the temporary file
+            temp_path = path.with_suffix(".tmp")
+
+            # Determine the starting point for download
+            downloaded_size = temp_path.stat().st_size if temp_path.exists() else 0
+            remaining_size = content_length - downloaded_size
+
+            if downloaded_size == content_length:
+                return path
+
+            # Skip the already downloaded parts by iterating only remaining bytes
+            response.iter_bytes(chunk_size=chunk_size)
+            with open(temp_path, "ab") as fd:
                 with tqdm(
-                    total=content_length,
+                    total=remaining_size,
                     unit="iB",
                     unit_scale=True,
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+                    initial=downloaded_size,
+                    dynamic_ncols=True,
                 ) as progress_bar:
                     time_start = time.time()
-                    max_elements = 10
-                    download_rates = deque(maxlen=max_elements)
 
-                    for chunk in response.iter_bytes():
+                    download_rates = deque(maxlen=sample_size_download_rate)
+
+                    # Skip already downloaded bytes
+                    if downloaded_size > 0:
+                        for _ in range(downloaded_size // chunk_size):
+                            next(response.iter_bytes(chunk_size=chunk_size))
+
+                    for chunk in response.iter_bytes(chunk_size=chunk_size):
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
                         time_end = time.time()
                         time.sleep(time_wait)
                         elapsed_time = time_end - time_start
-                        download_rates.append((len(chunk)/1024)/elapsed_time)
-                        if sum(list(download_rates))/max_elements < min_download_rate_limit:
-                            raise FailedToDownloadPolygonException()
+                        download_rates.append((len(chunk) / 1024) / elapsed_time)
+
+                        if len(download_rates) > sample_size_download_rate:
+                            if sum(list(download_rates)) / sample_size_download_rate < min_download_rate_limit:
+                                raise FailedToDownloadPolygonException()
+
                         time_start = time.time()
+
+            # Rename the temp file to final file upon successful download
+            temp_path.rename(path)
 
         return path
 
@@ -365,7 +391,6 @@ class Sicar(Url):
                         chunk_size=chunk_size,
                         time_wait=time_wait,
                         min_download_rate_limit=min_download_rate_limit,
-                        min_download_rate_limit_tolerance=min_download_rate_limit_tolerance
                     )
                 elif debug:
                     print(

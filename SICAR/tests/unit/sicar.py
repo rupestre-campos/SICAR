@@ -151,7 +151,7 @@ class SicarTestCase(unittest.TestCase):
             "Content-Length": 4096,
         }
 
-        response_mock.iter_bytes = lambda: (
+        response_mock.iter_bytes = lambda chunk_size: (
             (yield b"chunk1"),
             (yield b"chunk2"),
         )
