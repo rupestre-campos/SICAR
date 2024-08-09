@@ -286,7 +286,7 @@ class Sicar(Url):
                         time.sleep(time_wait)
                         time_end = time.time()
                         elapsed_time = time_end - time_start
-                        if (len(chunk)*1024)/elapsed_time < min_download_rate_limit:
+                        if (len(chunk)/1024)/elapsed_time < min_download_rate_limit:
                             min_download_rate_limit_tolerance_count +=1
                             if min_download_rate_limit_tolerance_count > min_download_rate_limit_tolerance:
                                 raise FailedToDownloadPolygonException()
