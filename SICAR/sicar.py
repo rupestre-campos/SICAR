@@ -224,6 +224,7 @@ class Sicar(Url):
         folder: str,
         chunk_size: int = 1024,
         time_wait: int = 0,
+        timeout_limit: int = 10,
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -235,6 +236,7 @@ class Sicar(Url):
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
+            timeout_limit (int): Max time to wait between each chunk before raising a Error. Defaults to 10.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -275,10 +277,16 @@ class Sicar(Url):
                     unit_scale=True,
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
                 ) as progress_bar:
+                    time_start = time.time()
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
                         time.sleep(time_wait)
+                        time_end = time.time()
+                        elapsed_time = time_end - time_start
+                        if elapsed_time > timeout_limit:
+                            raise FailedToDownloadPolygonException()
+                        time_start = time.time()
 
         return path
 
@@ -291,6 +299,7 @@ class Sicar(Url):
         debug: bool = False,
         chunk_size: int = 1024,
         time_wait: int = 0,
+        timeout_limit: int = 10,
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -303,6 +312,7 @@ class Sicar(Url):
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
+            timeout_limit (int): Max time to wait between each chunk before raising a Error. Defaults to 10.
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -345,7 +355,8 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
-                        time_wait=time_wait
+                        time_wait=time_wait,
+                        timeout_limit=timeout_limit
                     )
                 elif debug:
                     print(
