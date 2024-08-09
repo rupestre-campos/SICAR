@@ -225,7 +225,7 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
-        sample_size_download_rate: int = 25,
+        sample_size_download_rate: int = 10,
         debug: bool = False
 
     ) -> Path:
@@ -300,7 +300,6 @@ class Sicar(Url):
                         next(response.iter_bytes(chunk_size=chunk_size))
 
                 for chunk in response.iter_bytes(chunk_size=chunk_size):
-                    print("chunk")
                     fd.write(chunk)
 
                     time_end = time.time()
@@ -308,7 +307,7 @@ class Sicar(Url):
                     elapsed_time = time_end - time_start
                     download_rates.append((len(chunk) / 1024) / elapsed_time)
 
-                    if len(download_rates) > sample_size_download_rate:
+                    if len(list(download_rates)) > sample_size_download_rate:
                         mean_rate = sum(list(download_rates)) / sample_size_download_rate
                         if debug:
                             print(f"Mean rate: {mean_rate}")
