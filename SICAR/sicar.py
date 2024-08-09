@@ -254,29 +254,31 @@ class Sicar(Url):
             try:
                 if response.status_code != httpx.codes.OK:
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+                content_length = int(response.headers.get("Content-Length", 0))
+
+                content_type = response.headers.get("Content-Type", "")
+
+                if content_length == 0 or not content_type.startswith("application/zip"):
+                    raise FailedToDownloadPolygonException()
+                path = Path(
+                    os.path.join(folder, f"{state.value}_{polygon.value}")
+                ).with_suffix(".zip")
+
+                with open(path, "wb") as fd:
+                    with tqdm(
+                        total=content_length,
+                        unit="iB",
+                        unit_scale=True,
+                        desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+                    ) as progress_bar:
+                        for chunk in response.iter_bytes():
+                            fd.write(chunk)
+                            progress_bar.update(len(chunk))
+
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
-
-            content_length = int(response.headers.get("Content-Length", 0))
-
-            content_type = response.headers.get("Content-Type", "")
-
-            if content_length == 0 or not content_type.startswith("application/zip"):
-                raise FailedToDownloadPolygonException()
-            path = Path(
-                os.path.join(folder, f"{state.value}_{polygon.value}")
-            ).with_suffix(".zip")
-
-            with open(path, "wb") as fd:
-                with tqdm(
-                    total=content_length,
-                    unit="iB",
-                    unit_scale=True,
-                    desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
-                ) as progress_bar:
-                    for chunk in response.iter_bytes():
-                        fd.write(chunk)
-                        progress_bar.update(len(chunk))
+            except Exception as error:
+                raise FailedToDownloadPolygonException() from error
 
         return path
 
