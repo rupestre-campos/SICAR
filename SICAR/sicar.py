@@ -225,7 +225,9 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
-        sample_size_download_rate: int = 25
+        sample_size_download_rate: int = 25,
+        debug: bool = False
+
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -312,7 +314,10 @@ class Sicar(Url):
                         download_rates.append((len(chunk) / 1024) / elapsed_time)
 
                         if len(download_rates) > sample_size_download_rate:
-                            if sum(list(download_rates)) / sample_size_download_rate < min_download_rate_limit:
+                            mean_rate = sum(list(download_rates)) / sample_size_download_rate
+                            if debug:
+                                print(f"Mean rate: {mean_rate}")
+                            if mean_rate < min_download_rate_limit:
                                 raise FailedToDownloadPolygonException()
 
                         time_start = time.time()
@@ -332,7 +337,7 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
-        min_download_rate_limit_tolerance: int = 3
+
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -345,7 +350,6 @@ class Sicar(Url):
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
             time_wait (int): Time to wait in seconds between each chunk read for rate limiting. Defaults to 0.
-            timeout_limit (int): Max time to wait between each chunk before raising a Error. Defaults to 10.
             min_download_rate_limit (float): Minimal acceptable rate in kb/s before raising a Error. Defaults to 3.
 
         Returns:
@@ -391,6 +395,7 @@ class Sicar(Url):
                         chunk_size=chunk_size,
                         time_wait=time_wait,
                         min_download_rate_limit=min_download_rate_limit,
+                        debug=debug
                     )
                 elif debug:
                     print(
@@ -400,6 +405,9 @@ class Sicar(Url):
                 FailedToDownloadCaptchaException,
                 FailedToDownloadPolygonException,
             ) as error:
+                if debug:
+                    print(f"[{tries:02d}] - {error} When requesting {info}")
+            except Exception as error:
                 if debug:
                     print(f"[{tries:02d}] - {error} When requesting {info}")
             finally:
