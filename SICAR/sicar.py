@@ -225,6 +225,7 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
+        min_download_rate_limit_tolerance: int = 3
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -278,14 +279,17 @@ class Sicar(Url):
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
                 ) as progress_bar:
                     time_start = time.time()
+                    min_download_rate_limit_tolerance_count = 0
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
                         time.sleep(time_wait)
                         time_end = time.time()
                         elapsed_time = time_end - time_start
-                        if len(chunk)/elapsed_time < min_download_rate_limit:
-                            raise FailedToDownloadPolygonException()
+                        if (len(chunk)*1024)/elapsed_time < min_download_rate_limit:
+                            min_download_rate_limit_tolerance_count +=1
+                            if min_download_rate_limit_tolerance_count > min_download_rate_limit_tolerance:
+                                raise FailedToDownloadPolygonException()
                         time_start = time.time()
 
         return path
@@ -300,6 +304,7 @@ class Sicar(Url):
         chunk_size: int = 1024,
         time_wait: int = 0,
         min_download_rate_limit: float = 3,
+        min_download_rate_limit_tolerance: int = 3
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -357,7 +362,8 @@ class Sicar(Url):
                         folder=folder,
                         chunk_size=chunk_size,
                         time_wait=time_wait,
-                        min_download_rate_limit=min_download_rate_limit
+                        min_download_rate_limit=min_download_rate_limit,
+                        min_download_rate_limit_tolerance=min_download_rate_limit_tolerance
                     )
                 elif debug:
                     print(
