@@ -286,10 +286,10 @@ class Sicar(Url):
                     for chunk in response.iter_bytes():
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
-                        time.sleep(time_wait)
                         time_end = time.time()
+                        time.sleep(time_wait)
                         elapsed_time = time_end - time_start
-                        download_rates.append(len(chunk)/1024)/elapsed_time)
+                        download_rates.append((len(chunk)/1024)/elapsed_time)
                         if sum(list(download_rates))/max_elements < min_download_rate_limit:
                             raise FailedToDownloadPolygonException()
                         time_start = time.time()
