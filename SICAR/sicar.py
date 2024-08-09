@@ -307,7 +307,7 @@ class Sicar(Url):
                     elapsed_time = time_end - time_start
                     download_rates.append((len(chunk) / 1024) / elapsed_time)
 
-                    if len(list(download_rates)) > sample_size_download_rate:
+                    if len(download_rates) == sample_size_download_rate:
                         mean_rate = sum(list(download_rates)) / sample_size_download_rate
                         if debug:
                             print(f"Mean rate: {mean_rate}")
