@@ -266,7 +266,7 @@ class Sicar(Url):
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
-
+            print("start download")
             content_length = int(response.headers.get("Content-Length", 0))
             content_type = response.headers.get("Content-Type", "")
 
@@ -286,34 +286,34 @@ class Sicar(Url):
                 return path
 
             # Skip the already downloaded parts by iterating only remaining bytes
-            response.iter_bytes(chunk_size=chunk_size)
+
             with open(temp_path, "ab") as fd:
 
-                time_start = time.time()
-
-                download_rates = deque(maxlen=sample_size_download_rate)
-
-                # Skip already downloaded bytes
-                if downloaded_size > 0:
-                    for _ in range(downloaded_size // chunk_size):
-                        next(response.iter_bytes(chunk_size=chunk_size))
-
-                for chunk in response.iter_bytes(chunk_size=chunk_size):
-                    fd.write(chunk)
-
-                    time_end = time.time()
-                    time.sleep(time_wait)
-                    elapsed_time = time_end - time_start
-                    download_rates.append((len(chunk) / 1024) / elapsed_time)
-
-                    if len(download_rates) > sample_size_download_rate:
-                        mean_rate = sum(list(download_rates)) / sample_size_download_rate
-                        if debug:
-                            print(f"Mean rate: {mean_rate}")
-                        if mean_rate < min_download_rate_limit:
-                            raise FailedToDownloadPolygonException()
-
                     time_start = time.time()
+
+                    download_rates = deque(maxlen=sample_size_download_rate)
+
+                    # Skip already downloaded bytes
+                    if downloaded_size > 0:
+                        for _ in range(downloaded_size // chunk_size):
+                            next(response.iter_bytes(chunk_size=chunk_size))
+
+                    for chunk in response.iter_bytes(chunk_size=chunk_size):
+                        fd.write(chunk)
+
+                        time_end = time.time()
+                        time.sleep(time_wait)
+                        elapsed_time = time_end - time_start
+                        download_rates.append((len(chunk) / 1024) / elapsed_time)
+
+                        if len(download_rates) > sample_size_download_rate:
+                            mean_rate = sum(list(download_rates)) / sample_size_download_rate
+                            if debug:
+                                print(f"Mean rate: {mean_rate}")
+                            if mean_rate < min_download_rate_limit:
+                                raise FailedToDownloadPolygonException()
+
+                        time_start = time.time()
 
             # Rename the temp file to final file upon successful download
             temp_path.rename(path)
