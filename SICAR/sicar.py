@@ -344,8 +344,9 @@ class Sicar(Url):
 
         while tries > 0:
             try:
+                time.sleep(random.random() + random.random())
                 captcha = self._driver.get_captcha(self._download_captcha())
-
+                time.sleep(random.random() + random.random())
                 if len(captcha) == 5:
                     if debug:
                         print(
