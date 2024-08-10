@@ -361,17 +361,18 @@ class Sicar(Url):
                         chunk_size=chunk_size,
                         min_download_rate=min_download_rate
                     )
-                elif debug:
+                if debug:
                     print(
                         f"[{tries:02d}] - Invalid captcha '{captcha}' to request {info}"
                     )
+                continue
             except (
                 FailedToDownloadCaptchaException,
                 FailedToDownloadPolygonException,
             ) as error:
                 if debug:
                     print(f"[{tries:02d}] - {error} When requesting {info}")
-            finally:
+
                 tries -= 1
                 time.sleep(random.random() + random.random())
 
