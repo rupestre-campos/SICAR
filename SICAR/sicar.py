@@ -18,6 +18,7 @@ from tqdm import tqdm
 from typing import Dict
 from pathlib import Path
 from urllib.parse import urlencode
+from collections import deque
 
 from SICAR.drivers import Captcha, Tesseract
 from SICAR.state import State
@@ -223,6 +224,8 @@ class Sicar(Url):
         captcha: str,
         folder: str,
         chunk_size: int = 1024,
+        min_download_rate = 10
+
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -233,6 +236,7 @@ class Sicar(Url):
             captcha (str): The captcha value for verification.
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            min_download_rate (int): The min download rate in kbps to terminate download. Defaults to 10
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -273,10 +277,20 @@ class Sicar(Url):
                     unit="iB",
                     unit_scale=True,
                     desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+                    ascii=True
                 ) as progress_bar:
-                    for chunk in response.iter_bytes():
+                    max_items = 15
+                    rate_list = deque(maxlen=max_items)
+                    for chunk in response.iter_bytes(chunk_size=chunk_size):
                         fd.write(chunk)
                         progress_bar.update(len(chunk))
+                        data = progress_bar.format_dict
+                        if data.get("rate"):
+                            rate_list.append(data.get("rate")/data.get("unit_divisor"))
+                        if len(rate_list) == max_items:
+                            mean = sum(rate_list)/max_items
+                            if mean < min_download_rate:
+                                raise FailedToDownloadPolygonException
 
         return path
 
@@ -288,6 +302,8 @@ class Sicar(Url):
         tries: int = 25,
         debug: bool = False,
         chunk_size: int = 1024,
+        min_download_rate = 10
+
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -299,6 +315,7 @@ class Sicar(Url):
             tries (int, optional): The number of attempts to download the data. Defaults to 25.
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            min_download_rate (int): The min download rate in kbps to terminate download. Defaults to 10
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -341,6 +358,7 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
+                        min_download_rate=min_download_rate
                     )
                 elif debug:
                     print(
