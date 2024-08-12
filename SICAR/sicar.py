@@ -252,29 +252,43 @@ class Sicar(Url):
         query = urlencode(
             {"idEstado": state.value, "tipoBase": polygon.value, "ReCaptcha": captcha}
         )
+        path = Path(
+            os.path.join(folder, f"{state.value}_{polygon.value}")
+        ).with_suffix(".zip")
 
-        with self._session.stream("GET", f"{self._DOWNLOAD_BASE}?{query}") as response:
+        # Check if a partial download exists
+        downloaded_bytes = path.stat().st_size if path.exists() else 0
+
+        headers = self._session.headers
+        headers["Range"] = f"bytes={downloaded_bytes}-"
+
+        with self._session.stream(
+            "GET",
+            f"{self._DOWNLOAD_BASE}?{query}",
+            headers=headers
+            ) as response:
             try:
-                if response.status_code != httpx.codes.OK:
+                if response.status_code not in [httpx.codes.OK, 206]:
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
 
                 content_length = int(response.headers.get("Content-Length", 0))
 
                 content_type = response.headers.get("Content-Type", "")
 
-                if content_length == 0 or not content_type.startswith("application/zip"):
+                if not content_type.startswith("application/zip"):
+                    print("wrong captcha")
                     raise FailedToDownloadPolygonException()
-                path = Path(
-                    os.path.join(folder, f"{state.value}_{polygon.value}")
-                ).with_suffix(".zip")
-
-                with open(path, "wb") as fd:
+                if content_length == 0:
+                    print("file already downloaded")
+                    return path
+                with open(path, "ab") as fd:
                     with tqdm(
                         total=content_length,
                         unit="iB",
                         unit_scale=True,
                         desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
-                        ascii=True
+                        ascii=True,
+                        initial=downloaded_bytes
                     ) as progress_bar:
                         for chunk in response.iter_bytes(chunk_size=chunk_size):
                             fd.write(chunk)
