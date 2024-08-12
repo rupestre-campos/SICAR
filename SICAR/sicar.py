@@ -18,7 +18,6 @@ from tqdm import tqdm
 from typing import Dict
 from pathlib import Path
 from urllib.parse import urlencode
-from collections import deque
 
 from SICAR.drivers import Captcha, Tesseract
 from SICAR.state import State
@@ -277,17 +276,12 @@ class Sicar(Url):
                         desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
                         ascii=True
                     ) as progress_bar:
-                        max_items = 15
-                        rate_list = deque(maxlen=max_items)
                         for chunk in response.iter_bytes(chunk_size=chunk_size):
                             fd.write(chunk)
                             progress_bar.update(len(chunk))
                             data = progress_bar.format_dict
                             if data.get("rate"):
-                                rate_list.append(data.get("rate")/data.get("unit_divisor"))
-                            if len(rate_list) == max_items:
-                                mean = sum(rate_list)/max_items
-                                if mean < min_download_rate:
+                                if data.get("rate") < min_download_rate:
                                     raise FailedToDownloadPolygonException()
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
