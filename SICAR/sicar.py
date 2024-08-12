@@ -281,7 +281,7 @@ class Sicar(Url):
                             progress_bar.update(len(chunk))
                             data = progress_bar.format_dict
                             if data.get("rate"):
-                                if data.get("rate") < min_download_rate:
+                                if data.get("rate")/1000 < min_download_rate:
                                     raise FailedToDownloadPolygonException()
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
