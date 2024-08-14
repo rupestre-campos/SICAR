@@ -149,9 +149,10 @@ class SicarTestCase(unittest.TestCase):
         response_mock.headers = {
             "Content-Type": "application/zip",
             "Content-Length": 4096,
+            #"Content-Range": "0-4096/4096"
         }
 
-        response_mock.iter_bytes = lambda: (
+        response_mock.iter_bytes = lambda chunk_size: (
             (yield b"chunk1"),
             (yield b"chunk2"),
         )
@@ -159,11 +160,19 @@ class SicarTestCase(unittest.TestCase):
         with patch.object(httpx.Client, "stream") as stream_mock:
             stream_mock.return_value.__enter__.return_value = response_mock
             sicar = Sicar(driver=self.mocked_captcha)
-            result = sicar._download_polygon(state, polygon, captcha, folder)
+            result = sicar._download_polygon(state, polygon, captcha, folder, overwrite=True)
 
         stream_mock.assert_called_once_with(
             "GET",
             r"https://consultapublica.car.gov.br/publico/estados/downloadBase?idEstado=MG&tipoBase=APPS&ReCaptcha=abc123",
+            headers=httpx.Headers(
+                {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                    "accept-encoding": "gzip, deflate, br",
+                    "connection": "close",
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                }
+            ),
         )
         mock_path.assert_called_once_with(f"{folder}/{state}_{polygon.value}")
         mock_open.assert_called_once_with(
@@ -239,6 +248,7 @@ class SicarTestCase(unittest.TestCase):
             captcha="ABCDE",
             folder=folder,
             chunk_size=chunk_size,
+            overwrite=True
         )
 
         self.assertIsInstance(result, Path)
@@ -401,3 +411,103 @@ class SicarTestCase(unittest.TestCase):
             sicar.get_release_dates()
 
         sicar._session.get.assert_called_once()
+
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch.object(Path, "__init__", return_value=None)
+    @patch("tqdm.tqdm", side_effect=lambda *args, **kwargs: MagicMock())
+    def test_download_polygon_range_success(self, mock_tqdm, mock_path, mock_open):
+        state = State.MG
+        polygon = Polygon.APPS
+        captcha = "abc123"
+        folder = "polygons"
+        response_mock = MagicMock()
+        response_mock.status_code = httpx.codes.PARTIAL_CONTENT
+        response_mock.headers = {
+            "Content-Type": "application/zip",
+            "Content-Length": 4096,
+            "Content-Range": "0-4096/4096"
+        }
+
+        response_mock.iter_bytes = lambda chunk_size: (
+            (yield b"chunk1"),
+            (yield b"chunk2"),
+        )
+
+        with patch.object(httpx.Client, "stream") as stream_mock:
+            stream_mock.return_value.__enter__.return_value = response_mock
+            mock_path.exists.return_value = False
+            mock_stat_values = MagicMock()
+            mock_stat_values.return_value.st_size.return_value = 0
+            mock_path.stat.return_value = mock_stat_values
+            sicar = Sicar(driver=self.mocked_captcha)
+            result = sicar._download_polygon(state, polygon, captcha, folder, overwrite=False)
+
+        stream_mock.assert_called_once_with(
+            "GET",
+            r"https://consultapublica.car.gov.br/publico/estados/downloadBase?idEstado=MG&tipoBase=APPS&ReCaptcha=abc123",
+            headers=httpx.Headers(
+                {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                    "accept-encoding": "gzip, deflate, br",
+                    "connection": "close",
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "range": "bytes=0-"
+                }
+            ),
+        )
+        mock_path.assert_called_once_with(f"{folder}/{state}_{polygon.value}")
+        mock_open.assert_called_once_with(
+            PosixPath(f"{folder}/{state}_{polygon.value}.zip"), "ab"
+        )
+        mock_open.return_value.__enter__.return_value.write.assert_called()
+        self.assertEqual(result, PosixPath(f"{folder}/{state}_{polygon.value}.zip"))
+
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch.object(Path, "__init__", return_value=None)
+    @patch("tqdm.tqdm", side_effect=lambda *args, **kwargs: MagicMock())
+    def test_download_polygon_range_continue_success(self, mock_tqdm, mock_path, mock_open):
+        state = State.MG
+        polygon = Polygon.APPS
+        captcha = "abc123"
+        folder = "polygons"
+        response_mock = MagicMock()
+        response_mock.status_code = httpx.codes.PARTIAL_CONTENT
+        response_mock.headers = {
+            "Content-Type": "application/zip",
+            "Content-Length": 500,
+            "Content-Range": "500-1000/1000"
+        }
+
+        response_mock.iter_bytes = lambda chunk_size: (
+            (yield b"chunk1"),
+            (yield b"chunk2"),
+        )
+
+        with patch.object(httpx.Client, "stream") as stream_mock:
+            stream_mock.return_value.__enter__.return_value = response_mock
+            mock_path.exists.return_value = True
+            mock_stat_values = MagicMock()
+            mock_stat_values.st_size().return_value = 500
+            mock_path.stat.return_value = mock_stat_values
+            sicar = Sicar(driver=self.mocked_captcha)
+            result = sicar._download_polygon(state, polygon, captcha, folder, overwrite=False)
+
+        stream_mock.assert_called_once_with(
+            "GET",
+            r"https://consultapublica.car.gov.br/publico/estados/downloadBase?idEstado=MG&tipoBase=APPS&ReCaptcha=abc123",
+            headers=httpx.Headers(
+                {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                    "accept-encoding": "gzip, deflate, br",
+                    "connection": "close",
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "range": "bytes=499-"
+                }
+            ),
+        )
+        mock_path.assert_called_once_with(f"{folder}/{state}_{polygon.value}")
+        mock_open.assert_called_once_with(
+            PosixPath(f"{folder}/{state}_{polygon.value}.zip"), "ab"
+        )
+        mock_open.return_value.__enter__.return_value.write.assert_called()
+        self.assertEqual(result, PosixPath(f"{folder}/{state}_{polygon.value}.zip"))

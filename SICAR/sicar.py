@@ -223,7 +223,7 @@ class Sicar(Url):
         captcha: str,
         folder: str,
         chunk_size: int = 1024,
-        min_download_rate = 10
+        overwrite: bool = True
 
     ) -> Path:
         """
@@ -235,7 +235,7 @@ class Sicar(Url):
             captcha (str): The captcha value for verification.
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
-            min_download_rate (int): The min download rate in kbps to terminate download. Defaults to 10
+            overwrite (bool): When True file will have to be downloaded entirely, value False will resume downloads. Defaults to True.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -256,11 +256,15 @@ class Sicar(Url):
             os.path.join(folder, f"{state.value}_{polygon.value}")
         ).with_suffix(".zip")
 
-        # Check if a partial download exists
-        downloaded_bytes = path.stat().st_size if path.exists() else 0
 
+        downloaded_bytes = 0
+        file_open_mode = "wb"
         headers = self._session.headers
-        headers["Range"] = f"bytes={downloaded_bytes}-"
+        if not overwrite:
+            downloaded_bytes = path.stat().st_size if path.exists() else 0
+            byte_range_header = downloaded_bytes-1 if downloaded_bytes > 0 else 0
+            headers["Range"] = f"bytes={byte_range_header}-"
+            file_open_mode = "ab"
 
         with self._session.stream(
             "GET",
@@ -268,39 +272,45 @@ class Sicar(Url):
             headers=headers
             ) as response:
             try:
-                if response.status_code not in [httpx.codes.OK, 206]:
+
+                if response.status_code not in [httpx.codes.OK, httpx.codes.PARTIAL_CONTENT]:
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
 
                 content_length = int(response.headers.get("Content-Length", 0))
-
+                content_range = int(response.headers.get("Content-Range","/0").split("/")[-1])
                 content_type = response.headers.get("Content-Type", "")
 
+                file_size = max([content_length, content_range])
+
                 if not content_type.startswith("application/zip"):
-                    print("wrong captcha")
-                    raise FailedToDownloadPolygonException()
-                if content_length == 0:
-                    print("file already downloaded")
-                    return path
-                with open(path, "ab") as fd:
+                    raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+
+                if not overwrite:
+                    if content_range > 0 and content_range == downloaded_bytes:
+                        print("File already downloaded")
+                        return path
+
+                with open(path, file_open_mode) as fd:
                     with tqdm(
-                        total=content_length,
+                        total=file_size,
                         unit="iB",
                         unit_scale=True,
                         desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
                         ascii=True,
                         initial=downloaded_bytes
                     ) as progress_bar:
+                        n = 0
                         for chunk in response.iter_bytes(chunk_size=chunk_size):
+                            if not overwrite:
+                                if n == 0 and downloaded_bytes > 0:
+                                    chunk = chunk[1:]
+                                    n+=1
                             fd.write(chunk)
                             progress_bar.update(len(chunk))
-                            data = progress_bar.format_dict
-                            if data.get("rate"):
-                                if data.get("rate")/1000 < min_download_rate:
-                                    raise FailedToDownloadPolygonException()
+
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
-            except (httpx.ReadError, httpx.ReadTimeout) as error:
-                raise FailedToDownloadPolygonException() from error
+
         return path
 
     def download_state(
@@ -311,7 +321,7 @@ class Sicar(Url):
         tries: int = 25,
         debug: bool = False,
         chunk_size: int = 1024,
-        min_download_rate = 10
+        overwrite: bool = True
 
     ) -> Path | bool:
         """
@@ -324,7 +334,7 @@ class Sicar(Url):
             tries (int, optional): The number of attempts to download the data. Defaults to 25.
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
-            min_download_rate (int): The min download rate in kbps to terminate download. Defaults to 10
+            overwrite (bool): When True file will have to be downloaded entirely, value False will resume downloads. Defaults to True.
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -353,9 +363,7 @@ class Sicar(Url):
 
         while tries > 0:
             try:
-                time.sleep(random.random() + random.random())
                 captcha = self._driver.get_captcha(self._download_captcha())
-                time.sleep(random.random() + random.random())
                 if len(captcha) == 5:
                     if debug:
                         print(
@@ -368,13 +376,13 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
-                        min_download_rate=min_download_rate
+                        overwrite=overwrite
                     )
                 if debug:
                     print(
                         f"[{tries:02d}] - Invalid captcha '{captcha}' to request {info}"
                     )
-                continue
+                tries -= 1
             except (
                 FailedToDownloadCaptchaException,
                 FailedToDownloadPolygonException,
