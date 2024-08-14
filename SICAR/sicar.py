@@ -223,7 +223,8 @@ class Sicar(Url):
         captcha: str,
         folder: str,
         chunk_size: int = 1024,
-        overwrite: bool = True
+        overwrite: bool = True,
+        min_download_rate: float = 25.0
 
     ) -> Path:
         """
@@ -307,7 +308,10 @@ class Sicar(Url):
                                     n+=1
                             fd.write(chunk)
                             progress_bar.update(len(chunk))
-
+                            if not progress_bar.format_dict.get("rate"):
+                                continue
+                            if progress_bar.format_dict.get("rate", 0)/1000 < min_download_rate:
+                                raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
 
@@ -321,7 +325,8 @@ class Sicar(Url):
         tries: int = 25,
         debug: bool = False,
         chunk_size: int = 1024,
-        overwrite: bool = True
+        overwrite: bool = True,
+        min_download_rate: float = 25.0
 
     ) -> Path | bool:
         """
@@ -376,7 +381,8 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
-                        overwrite=overwrite
+                        overwrite=overwrite,
+                        min_download_rate=min_download_rate
                     )
                 if debug:
                     print(
