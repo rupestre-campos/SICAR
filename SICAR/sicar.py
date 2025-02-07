@@ -44,7 +44,6 @@ class Sicar(Url):
     Attributes:
         _driver (Captcha): The driver used for handling captchas. Default is Tesseract.
     """
-    MAX_RANGE_SIZE = 100 * 1024 * 1024
 
     def __init__(
         self,
@@ -250,65 +249,71 @@ class Sicar(Url):
             state code and captcha. The response is then streamed and saved to a file in chunks. A progress bar is displayed
             during the download. The downloaded file path is returned.
         """
+
         query = urlencode(
             {"idEstado": state.value, "tipoBase": polygon.value, "ReCaptcha": captcha}
         )
-        path = Path(os.path.join(folder, f"{state.value}_{polygon.value}.zip"))
+        path = Path(
+            os.path.join(folder, f"{state.value}_{polygon.value}")
+        ).with_suffix(".zip")
 
-        headers = self._session.headers.copy()
+
         downloaded_bytes = 0
-        file_open_mode = "wb" if overwrite else "ab"
-
+        file_open_mode = "wb"
+        headers = self._session.headers
         if not overwrite:
             downloaded_bytes = path.stat().st_size if path.exists() else 0
-            headers["Range"] = f"bytes={downloaded_bytes}-"
+            byte_range_header = downloaded_bytes-1 if downloaded_bytes > 0 else 0
+            headers["Range"] = f"bytes={byte_range_header}-"
+            file_open_mode = "ab"
 
-        with open(path, file_open_mode) as fd, tqdm(
-            unit="iB",
-            unit_scale=True,
-            desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
-            ascii=True,
-            initial=downloaded_bytes
-        ) as progress_bar:
+        with self._session.stream(
+            "GET",
+            f"{self._DOWNLOAD_BASE}?{query}",
+            headers=headers
+            ) as response:
+            try:
 
-            while True:
-                end_range = downloaded_bytes + self.MAX_RANGE_SIZE - 1
-                headers["Range"] = f"bytes={downloaded_bytes}-{end_range}"
+                if response.status_code not in [httpx.codes.OK, httpx.codes.PARTIAL_CONTENT]:
+                    raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
 
-                with self._session.stream("GET", f"{self._DOWNLOAD_BASE}?{query}", headers=headers) as response:
-                    try:
-                        if response.status_code not in [httpx.codes.OK, httpx.codes.PARTIAL_CONTENT]:
-                            raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+                content_length = int(response.headers.get("Content-Length", 0))
+                content_range = int(response.headers.get("Content-Range","/0").split("/")[-1])
+                content_type = response.headers.get("Content-Type", "")
 
-                        content_length = int(response.headers.get("Content-Length", 0))
-                        content_range = int(response.headers.get("Content-Range", "/0").split("/")[-1])
-                        content_type = response.headers.get("Content-Type", "")
+                file_size = max([content_length, content_range])
 
-                        file_size = max(content_length, content_range)
+                if not content_type.startswith("application/zip"):
+                    raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
 
-                        if not content_type.startswith("application/zip"):
-                            raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+                if not overwrite:
+                    if content_range > 0 and content_range == downloaded_bytes:
+                        print("File already downloaded")
+                        return path
 
-                        if not overwrite and downloaded_bytes >= file_size:
-                            print("File already downloaded")
-                            return path
-
+                with open(path, file_open_mode) as fd:
+                    with tqdm(
+                        total=file_size,
+                        unit="iB",
+                        unit_scale=True,
+                        desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+                        ascii=True,
+                        initial=downloaded_bytes
+                    ) as progress_bar:
+                        n = 0
                         for chunk in response.iter_bytes(chunk_size=chunk_size):
+                            if not overwrite:
+                                if n == 0 and downloaded_bytes > 0:
+                                    #chunk = chunk[1:]
+                                    n+=1
                             fd.write(chunk)
                             progress_bar.update(len(chunk))
-
                             if not progress_bar.format_dict.get("rate"):
                                 continue
                             if progress_bar.format_dict.get("rate", 0)/1000 < min_download_rate:
                                 raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
-
-                        downloaded_bytes = path.stat().st_size
-
-                        if downloaded_bytes >= file_size:
-                            break  # Done downloading
-
-                    except UrlNotOkException as error:
-                        raise FailedToDownloadPolygonException() from error
+            except UrlNotOkException as error:
+                raise FailedToDownloadPolygonException() from error
 
         return path
 
