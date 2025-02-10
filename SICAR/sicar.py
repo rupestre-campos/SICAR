@@ -304,7 +304,7 @@ class Sicar(Url):
                         for chunk in response.iter_bytes(chunk_size=chunk_size):
                             if not overwrite:
                                 if n == 0 and downloaded_bytes > 0:
-                                    chunk = chunk[1:]
+                                    #chunk = chunk[1:]
                                     n+=1
                             fd.write(chunk)
                             progress_bar.update(len(chunk))
