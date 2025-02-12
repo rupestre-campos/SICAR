@@ -263,7 +263,7 @@ class Sicar(Url):
         headers = self._session.headers
         if not overwrite:
             downloaded_bytes = path.stat().st_size if path.exists() else 0
-            byte_range_header = downloaded_bytes if downloaded_bytes > 0 else 0
+            byte_range_header = downloaded_bytes-1 if downloaded_bytes > 0 else 0
             headers["Range"] = f"bytes={byte_range_header}-"
             file_open_mode = "ab"
 
