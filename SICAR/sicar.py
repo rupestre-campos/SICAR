@@ -49,6 +49,11 @@ class Sicar(Url):
         self,
         driver: Captcha = Tesseract,
         headers: Dict = None,
+        retries: int = 3,
+        read_timeout: int = 20,
+        connect_timeout: int = 20,
+        use_http2: bool = False,
+        proxy: str = None
     ):
         """
         Initialize an instance of the Sicar class.
@@ -56,12 +61,24 @@ class Sicar(Url):
         Parameters:
             driver (Captcha): The driver used for handling captchas. Default is Tesseract.
             headers (Dict): Additional headers for HTTP requests. Default is None.
+            retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
+            use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
+            proxy (str): URL or ip:port to use as proxy. Defaults to None.
 
         Returns:
             None
         """
         self._driver = driver()
-        self._create_session(headers=headers)
+        self._create_session(
+            headers=headers,
+            retries=retries,
+            read_timeout=read_timeout,
+            connect_timeout=connect_timeout,
+            use_http2=use_http2,
+            proxy=proxy
+        )
         self._initialize_cookies()
 
     def _parse_release_dates(self, response: bytes) -> Dict:
@@ -94,12 +111,25 @@ class Sicar(Url):
 
         return state_dates
 
-    def _create_session(self, headers: Dict = None):
+    def _create_session(
+        self,
+        headers: Dict = None,
+        retries: int = 3,
+        read_timeout: int = 20,
+        connect_timeout: int = 20,
+        use_http2: bool = False,
+        proxy: str = None
+    ):
         """
         Create a new session for making HTTP requests.
 
         Parameters:
             headers (Dict): Additional headers for the session. Default is None.
+            retries (int): Number of retries to use in HTTP Transport layer. Default is 3.
+            read_timeout (int): Number of seconds to wait before raising connection read Timeout. Default is 20.
+            connect_timeout (int): Number of seconds to wait before raising ConnectError. Default is 20.
+            use_http2 (bool): Enable use of HTTP/2 protocol. Defaults to False.
+            proxy (str): URL or ip:port to use as proxy. Defaults to None.
 
         Note:
             The SSL certificate verification is disabled by default using `verify=False`. This allows connections to servers
@@ -111,7 +141,14 @@ class Sicar(Url):
         Returns:
             None
         """
-        self._session = httpx.Client(verify=False)
+        timeout = httpx.Timeout(read_timeout, connect=connect_timeout)
+        self._session = httpx.Client(
+            verify=False,
+            transport=httpx.HTTPTransport(retries=retries),
+            timeout=timeout,
+            http2=use_http2,
+            proxy=proxy
+        )
         self._session.headers.update(
             headers
             if isinstance(headers, dict)
@@ -186,6 +223,9 @@ class Sicar(Url):
         captcha: str,
         folder: str,
         chunk_size: int = 1024,
+        overwrite: bool = True,
+        min_download_rate: float = 25.0
+
     ) -> Path:
         """
         Download polygon for the specified state.
@@ -196,6 +236,7 @@ class Sicar(Url):
             captcha (str): The captcha value for verification.
             folder (str): The folder path where the polygon will be saved.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            overwrite (bool): When True file will have to be downloaded entirely, value False will resume downloads. Defaults to True.
 
         Returns:
             Path: The path to the downloaded polygon.
@@ -212,34 +253,68 @@ class Sicar(Url):
         query = urlencode(
             {"idEstado": state.value, "tipoBase": polygon.value, "ReCaptcha": captcha}
         )
+        path = Path(
+            os.path.join(folder, f"{state.value}_{polygon.value}")
+        ).with_suffix(".zip")
 
-        with self._session.stream("GET", f"{self._DOWNLOAD_BASE}?{query}") as response:
+
+        downloaded_bytes = 0
+        file_open_mode = "wb"
+        headers = self._session.headers
+        if not overwrite:
+            downloaded_bytes = path.stat().st_size if path.exists() else 0
+            byte_range_header = downloaded_bytes-1 if downloaded_bytes > 0 else 0
+            headers["Range"] = f"bytes={byte_range_header}-"
+            file_open_mode = "ab"
+
+        with self._session.stream(
+            "GET",
+            f"{self._DOWNLOAD_BASE}?{query}",
+            headers=headers
+            ) as response:
             try:
-                if response.status_code != httpx.codes.OK:
+
+                if response.status_code not in [httpx.codes.OK, httpx.codes.PARTIAL_CONTENT]:
                     raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+
+                content_length = int(response.headers.get("Content-Length", 0))
+                content_range = int(response.headers.get("Content-Range","/0").split("/")[-1])
+                content_type = response.headers.get("Content-Type", "")
+
+                file_size = max([content_length, content_range])
+
+                if not content_type.startswith("application/zip"):
+                    raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
+
+                if not overwrite:
+                    if content_range > 0 and content_range == downloaded_bytes:
+                        print("File already downloaded")
+                        return path
+
+                with open(path, file_open_mode) as fd:
+                    with tqdm(
+                        total=file_size,
+                        unit="iB",
+                        unit_scale=True,
+                        desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
+                        ascii=True,
+                        initial=downloaded_bytes
+                    ) as progress_bar:
+                        n = 0
+                        for chunk in response.iter_bytes(chunk_size=chunk_size):
+                            if not overwrite:
+                                if n == 0 and downloaded_bytes > 0:
+                                    chunk = chunk[1:]
+                                    n+=1
+                            fd.write(chunk)
+                            progress_bar.update(len(chunk))
+                            if not progress_bar.format_dict.get("rate"):
+                                continue
+                            if progress_bar.format_dict.get("rate", 0)/1000 < min_download_rate:
+                                raise UrlNotOkException(f"{self._DOWNLOAD_BASE}?{query}")
             except UrlNotOkException as error:
                 raise FailedToDownloadPolygonException() from error
 
-            content_length = int(response.headers.get("Content-Length", 0))
-
-            content_type = response.headers.get("Content-Type", "")
-
-            if content_length == 0 or not content_type.startswith("application/zip"):
-                raise FailedToDownloadPolygonException()
-            path = Path(
-                os.path.join(folder, f"{state.value}_{polygon.value}")
-            ).with_suffix(".zip")
-
-            with open(path, "wb") as fd:
-                with tqdm(
-                    total=content_length,
-                    unit="iB",
-                    unit_scale=True,
-                    desc=f"Downloading polygon '{polygon.value}' for state '{state.value}'",
-                ) as progress_bar:
-                    for chunk in response.iter_bytes():
-                        fd.write(chunk)
-                        progress_bar.update(len(chunk))
         return path
 
     def download_state(
@@ -250,6 +325,9 @@ class Sicar(Url):
         tries: int = 25,
         debug: bool = False,
         chunk_size: int = 1024,
+        overwrite: bool = True,
+        min_download_rate: float = 25.0
+
     ) -> Path | bool:
         """
         Download the polygon or other output format for the specified state.
@@ -261,6 +339,7 @@ class Sicar(Url):
             tries (int, optional): The number of attempts to download the data. Defaults to 25.
             debug (bool, optional): Whether to print debug information. Defaults to False.
             chunk_size (int, optional): The size of each chunk to download. Defaults to 1024.
+            overwrite (bool): When True file will have to be downloaded entirely, value False will resume downloads. Defaults to True.
 
         Returns:
             Path | bool: The path to the downloaded data if successful, or False if download fails.
@@ -290,7 +369,6 @@ class Sicar(Url):
         while tries > 0:
             try:
                 captcha = self._driver.get_captcha(self._download_captcha())
-
                 if len(captcha) == 5:
                     if debug:
                         print(
@@ -303,18 +381,21 @@ class Sicar(Url):
                         captcha=captcha,
                         folder=folder,
                         chunk_size=chunk_size,
+                        overwrite=overwrite,
+                        min_download_rate=min_download_rate
                     )
-                elif debug:
+                if debug:
                     print(
                         f"[{tries:02d}] - Invalid captcha '{captcha}' to request {info}"
                     )
+                tries -= 1
             except (
                 FailedToDownloadCaptchaException,
                 FailedToDownloadPolygonException,
             ) as error:
                 if debug:
                     print(f"[{tries:02d}] - {error} When requesting {info}")
-            finally:
+
                 tries -= 1
                 time.sleep(random.random() + random.random())
 
